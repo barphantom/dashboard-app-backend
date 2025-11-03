@@ -6,6 +6,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from marketdata.services import fetch_ohlcv_data, filter_ohlcv_last_year
+
 load_dotenv()
 
 class StockSearchView(APIView):
@@ -48,63 +50,19 @@ class OHLCVView(APIView):
         if not symbol:
             return Response({"error": "Query parameter 'symbol' is required"}, status=status.HTTP_400_BAD_REQUEST)
 
-        cache_key = f"ohlcv_{symbol.upper()}"
-        cached_data = cache.get(cache_key)
-
-        if cached_data:
-            print(f"✅ Using cached OHLCV data for {symbol.upper()}")
-            return Response({
-                "symbol": symbol.upper(),
-                "interval": "daily",
-                "data": cached_data,
-            })
-
-        url = f"https://www.alphavantage.co/query"
-        params = {
-            "function": "TIME_SERIES_DAILY",
-            "symbol": symbol.upper(),
-            "apikey": os.getenv("ALPHAVANTAGE_API_KEY"),
-            "outputsize": "full",
-        }
-
         try:
-            response = requests.get(url, params=params)
-            data = response.json()
-        except requests.exceptions.RequestException as e:
-            return Response({"error": "Failed to connect to Alpha Vantage: " + str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-        if "Note" in data:
-            return Response(
-                {"error": "API limit reached or temporary unavailability"},
-                status=status.HTTP_429_TOO_MANY_REQUESTS
-            )
-        if "Time Series (Daily)" not in data:
-            return Response({"error": "No data available for given symbol"}, status=status.HTTP_404_NOT_FOUND)
-
-        time_series = data["Time Series (Daily)"]
-        one_year_ago = datetime.datetime.now() - datetime.timedelta(days=365)
-
-        chart_data = []
-        for date, value in time_series.items():
-            date_obj = datetime.datetime.strptime(date, "%Y-%m-%d")
-            if date_obj > one_year_ago:
-                chart_data.append({
-                    "date": date,
-                    "open": float(value["1. open"]),
-                    "high": float(value["2. high"]),
-                    "low": float(value["3. low"]),
-                    "close": float(value["4. close"]),
-                    "volume": int(value["5. volume"]),
-                })
-
-        chart_data.sort(key=lambda x: datetime.datetime.strptime(x["date"], "%Y-%m-%d"))
-
-        cache.set(cache_key, chart_data, timeout=60 * 60 * 24)
+            raw_data = fetch_ohlcv_data(symbol)
+            one_year_chart_data = filter_ohlcv_last_year(raw_data=raw_data)
+        except ConnectionError as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        except ValueError as e:
+            msg = str(e)
+            if "limit" in msg.lower():
+                return Response({"error": msg}, status=status.HTTP_429_TOO_MANY_REQUESTS)
+            return Response({"error": msg}, status=status.HTTP_404_NOT_FOUND)
 
         return Response({
             "symbol": symbol.upper(),
             "interval": "daily",
-            "data": chart_data,
+            "data": one_year_chart_data,
         })
-
-
