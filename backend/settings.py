@@ -54,6 +54,7 @@ INSTALLED_APPS = [
     'users',
     'portfolio',
     'marketdata',
+    'recommendation',
 ]
 
 MIDDLEWARE = [
