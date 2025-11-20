@@ -213,17 +213,24 @@ class PortfolioChartView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, portfolio_id):
+        response = {
+            "chart": [],
+            "warnings": [],
+            "error": None,
+        }
+
         try:
             portfolio = Portfolio.objects.get(id=portfolio_id, owner=request.user)
         except Portfolio.DoesNotExist:
-            return Response({"error": "Portfolio not found"}, status=status.HTTP_404_NOT_FOUND)
+            response["error"] = "Portfolio not found"
+            return Response(response, status=status.HTTP_404_NOT_FOUND)
 
         stocks = portfolio.stocks.all()
         if not stocks:
-            return Response({"error": "Portfolio jest puste"}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(response, status=status.HTTP_200_OK)
 
         dfs = []
-        errors = []
+        warnings = []
 
         for stock in stocks:
             symbol = stock.symbol.upper()
@@ -233,16 +240,17 @@ class PortfolioChartView(APIView):
             try:
                 raw_data = fetch_ohlcv_data(symbol)
             except ConnectionError as e:
-                errors.append(f"Connection error for {symbol}: {e}")
+                warnings.append(f"Connection error for {symbol}: {e}")
                 continue
             except ValueError as e:
                 msg = str(e)
                 if "limit" in msg.lower():
-                    return Response({"error": msg}, status=status.HTTP_429_TOO_MANY_REQUESTS)
-                errors.append(f"Skipping {symbol} - {msg}")
+                    warnings.append(f"API limit reached for {symbol}: {msg}")
+                else:
+                    warnings.append(f"Skipping {symbol} - {msg}")
                 continue
             except Exception as e:
-                errors.append(f"Unexpected error for {symbol}: {e}")
+                warnings.append(f"Unexpected error for {symbol}: {e}")
                 continue
 
             # Filtrujemy dane tylko od daty zakupu
@@ -256,6 +264,7 @@ class PortfolioChartView(APIView):
                     })
 
             if not data:
+                warnings.append(f"No data for {symbol} after purchase date.")
                 continue
 
             df = pd.DataFrame(data)
@@ -264,7 +273,8 @@ class PortfolioChartView(APIView):
             dfs.append(df)
 
         if not dfs:
-            return Response({"error": "Brak danych dla wykresu portfela"}, status=status.HTTP_400_BAD_REQUEST)
+            response["warnings"] = warnings
+            return Response(response, status=status.HTTP_200_OK)
 
         # Połącz dane po dacie i wypełnij brakujące dni ostatnią znaną wartością
         combined = pd.concat(dfs, axis=1)
@@ -277,18 +287,13 @@ class PortfolioChartView(APIView):
         combined["total"] = combined.sum(axis=1)
 
         # Przygotuj dane do zwrotu
-        chart_data_response = [
-            {
-                "time": date.strftime("%Y-%m-%d"),
-                "value": round(float(value), 2),
-            }
+        chart = [
+            {"time": date.strftime("%Y-%m-%d"), "value": round(float(value), 2)}
             for date, value in combined["total"].items()
         ]
 
-        response = {"chart": chart_data_response}
-        if errors:
-            response["warnings"] = errors
-
+        response["chart"] = chart
+        response["warnings"] = warnings
         return Response(response, status=status.HTTP_200_OK)
 
 

@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from users.serializers import RegisterSerializer
-
+from portfolio.models import Portfolio
 
 class RegisterView(generics.CreateAPIView):
     permission_classes = [AllowAny]
@@ -15,6 +15,7 @@ class RegisterView(generics.CreateAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
+        Portfolio.objects.create(owner=user, name=f"My Portfolio {user.id}", description=f"My Portfolio Description {user.id}")
         refresh = RefreshToken.for_user(user)
         return Response({
             "user": {
@@ -50,32 +51,3 @@ class LoginView(APIView):
                 "lastName": user.lastName,
             }
         })
-
-
-        # email = request.data.get('email')
-        # password = request.data.get('password')
-        # if not email or not password:
-        #     return Response({'detail': "Email and password are required"}, status=status.HTTP_400_BAD_REQUEST)
-        #
-        # try:
-        #     user_obj = User.objects.get(email=email)
-        # except User.DoesNotExist:
-        #     return Response({'detail': "Wrong login data"}, status=status.HTTP_401_UNAUTHORIZED)
-        #
-        # user = authenticate(request, username=user_obj.username, password=password)
-        # if user is None:
-        #     return Response({'detail': "Wrong login data"}, status=status.HTTP_401_UNAUTHORIZED)
-        #
-        # refresh = RefreshToken.for_user(user)
-        # return Response({
-        #     'user': UserSerializer(user).data,
-        #     'access': str(refresh.access_token),
-        #     'refresh': str(refresh),
-        # })
-
-# class MeView(APIView):
-#     permission_classes = [IsAuthenticated]
-#
-#     def get(self, request):
-#         serializer = UserSerializer(request.user)
-#         return Response(serializer.data)
