@@ -24,3 +24,20 @@ class RegisterSerializer(serializers.ModelSerializer):
             password=validated_data['password']
         )
         return user
+
+
+class UserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['name', 'lastName', 'email']
+        read_only_fields = ['email']
+
+    def validate_name(self, value):
+        if not value.isalpha():
+            raise serializers.ValidationError("First name should contain only letters.")
+        return value.title()
+
+    def validate_lastName(self, value):
+        if not value.replace('-', '').isalpha():
+            raise serializers.ValidationError("Last name should contain only letters.")
+        return value.title()
