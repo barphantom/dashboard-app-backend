@@ -1,54 +1,20 @@
 import os
-import datetime
-from asyncio import timeout
-
+import yfinance as yf
+import pandas as pd
 import requests
 from django.core.cache import cache
 from dotenv import load_dotenv
+from django.utils import timezone
+from datetime import timedelta, datetime, time
 
 load_dotenv()
 
-def fetch_ohlcv_data(symbol: str):
-    symbol = symbol.upper()
-    cache_key = f"ohlcv_{symbol}"
-    cached_data = cache.get(cache_key)
-
-    if cached_data:
-        print(f"✅ Using cached OHLCV for {symbol}")
-        return cached_data
-
-    print(f"🔄 Fetching OHLCV from Alpha Vantage for {symbol}")
-    url = "https://www.alphavantage.co/query"
-    params = {
-        "function": "TIME_SERIES_DAILY",
-        "symbol": symbol,
-        "apikey": os.getenv("ALPHAVANTAGE_API_KEY"),
-        "outputsize": "full",
-    }
-
-    try:
-        response = requests.get(url, params=params)
-        data = response.json()
-    except requests.exceptions.RequestException as e:
-        raise ConnectionError(f"Failed to connect to Alpha Vantage API: {e}")
-
-    if "Note" in data:
-        raise ValueError("Alpha Vantage API limit reached")
-    if "Time Series (Daily)" not in data:
-        raise ValueError(f"No data for symbol {symbol}")
-
-    raw_data = data["Time Series (Daily)"]
-    cache.set(cache_key, raw_data, timeout=60 * 60 * 24)  # 24h
-
-    return raw_data
-
-
 def filter_ohlcv_last_year(raw_data: dict, days: int = 365):
-    one_year_ago = datetime.datetime.now() - datetime.timedelta(days=days)
+    one_year_ago = datetime.now() - timedelta(days=days)
     chart_data = []
 
     for date, value in raw_data.items():
-        date_obj = datetime.datetime.strptime(date, "%Y-%m-%d")
+        date_obj = datetime.strptime(date, "%Y-%m-%d")
         if date_obj > one_year_ago:
             chart_data.append({
                 "date": date,
@@ -59,10 +25,51 @@ def filter_ohlcv_last_year(raw_data: dict, days: int = 365):
                 "volume": int(value["5. volume"]),
             })
 
-    chart_data.sort(key=lambda x: datetime.datetime.strptime(x["date"], "%Y-%m-%d"))
+    chart_data.sort(key=lambda x: datetime.strptime(x["date"], "%Y-%m-%d"))
 
     return chart_data
 
+def fetch_ohlcv_data(symbol: str):
+    symbol = symbol.upper()
+    cache_key = f"ohlcv_yf_{symbol}"
+    cached_df = cache.get(cache_key)
+
+    if cached_df is not None and not cached_df.empty:
+        print(f"✅ Using cached OHLCV for {symbol}")
+        return cached_df
+
+    print(f"🔄 Fetching history from yfinance for {symbol}")
+
+    try:
+        ticker = yf.Ticker(symbol)
+        df = ticker.history(period="max", auto_adjust=True)
+
+        if df.empty:
+            return pd.DataFrame()
+
+        df = df.reset_index()
+        if 'Date' in df.columns:
+            df['Date'] = df['Date'].dt.date
+
+        cache.set(cache_key, df, timeout=get_seconds_until_midnight())
+
+        return df
+
+    except Exception as e:
+        print(f"❌ Error fetching {symbol}: {e}")
+        raise e
+
+def get_seconds_until_midnight():
+    now = timezone.now()
+    tomorrow = now + timedelta(days=1)
+    midnight = datetime.combine(tomorrow, time.min)
+
+    if timezone.is_aware(now):
+        current_tz = timezone.get_current_timezone()
+        midnight = timezone.make_aware(midnight, current_tz)
+
+    delta = midnight - now
+    return int(delta.total_seconds())
 
 def get_company_name(symbol: str):
     symbol = symbol.upper()

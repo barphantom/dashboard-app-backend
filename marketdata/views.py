@@ -1,11 +1,10 @@
 import datetime, os, requests
+from django.utils import timezone
 from dotenv import load_dotenv
-from django.core.cache import cache
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-
 from marketdata.services import fetch_ohlcv_data, filter_ohlcv_last_year
 
 load_dotenv()
@@ -50,19 +49,41 @@ class OHLCVView(APIView):
         if not symbol:
             return Response({"error": "Query parameter 'symbol' is required"}, status=status.HTTP_400_BAD_REQUEST)
 
-        try:
-            raw_data = fetch_ohlcv_data(symbol)
-            one_year_chart_data = filter_ohlcv_last_year(raw_data=raw_data)
-        except ConnectionError as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        except ValueError as e:
-            msg = str(e)
-            if "limit" in msg.lower():
-                return Response({"error": msg}, status=status.HTTP_429_TOO_MANY_REQUESTS)
-            return Response({"error": msg}, status=status.HTTP_404_NOT_FOUND)
-
-        return Response({
+        response = {
             "symbol": symbol.upper(),
             "interval": "daily",
-            "data": one_year_chart_data,
-        })
+            "data": [],
+        }
+
+        try:
+            full_df = fetch_ohlcv_data(symbol)
+            if full_df.empty:
+                return Response(response, status=status.HTTP_200_OK)
+
+            five_years_ago = timezone.now().date() - datetime.timedelta(days=365 * 5)
+            mask = full_df["Date"] >= five_years_ago
+
+            df_filtered = full_df.loc[mask].copy()
+            if df_filtered.empty:
+                return Response(response, status=status.HTTP_200_OK)
+
+            df_filtered["date_str"] = df_filtered["Date"].apply(lambda x: x.strftime("%Y-%m-%d"))
+            df_filtered = df_filtered.rename(columns={
+                "date_str": "date",
+                "Open": "open",
+                "High": "high",
+                "Low": "low",
+                "Close": "close",
+                "Volume": "volume"
+            })
+
+            final_cols = ["date", "open", "high", "low", "close", "volume"]
+            data = df_filtered[final_cols].to_dict(orient="records")
+
+            response["data"] = data
+
+        except Exception as e:
+            msg = f"❌ Error fetching ohlcv data for {symbol}: {e}"
+            return Response({"error": msg}, status=status.HTTP_404_NOT_FOUND)
+
+        return Response(response, status=status.HTTP_200_OK)

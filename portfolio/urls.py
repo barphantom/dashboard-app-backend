@@ -15,5 +15,5 @@ urlpatterns = [
 
     path('portfolio/<int:portfolio_id>/stats/', PortfolioStatsView.as_view(), name='portfolio-stats'),
     path('portfolio/<int:portfolio_id>/chart/', PortfolioChartView.as_view(), name='portfolio-chart'),
-    path('portfolio/<int:portfolio_id>/composition/', PortfolioCompositionView.as_view(), name='portfolio-composition')
+    path('portfolio/<int:portfolio_id>/composition/', PortfolioCompositionView.as_view(), name='portfolio-composition'),
 ]
