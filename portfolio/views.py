@@ -12,7 +12,7 @@ import pandas as pd
 
 from portfolio.models import Portfolio, PortfolioStock
 from portfolio.serializers import PortfolioSerializer, PortfolioStockSerializer
-from marketdata.services import fetch_ohlcv_data, get_company_name
+from marketdata.services import fetch_ohlcv_data, get_company_name, get_latest_prices
 
 load_dotenv()
 
@@ -338,3 +338,23 @@ class PortfolioCompositionView(APIView):
         response["warnings"] = warnings
 
         return Response(response, status=status.HTTP_200_OK)
+
+
+class PortfolioQuotesView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, portfolio_id):
+        try:
+            portfolio = Portfolio.objects.get(id=portfolio_id, owner=request.user)
+        except Portfolio.DoesNotExist:
+            return Response({"error": "Portfolio not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        stocks = portfolio.stocks.all()
+        symbols = [stock.symbol for stock in stocks]
+
+        if not symbols:
+            return Response({}, status=status.HTTP_200_OK)
+
+        current_prices = get_latest_prices(symbols)
+
+        return Response(current_prices, status=status.HTTP_200_OK)

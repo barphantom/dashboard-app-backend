@@ -1,6 +1,6 @@
 from django.urls import path
 from .views import PortfolioListCreateView, PortfolioDetailView, PortfolioStockListCreateView, PortfolioStockDetailView, \
-    PortfolioStatsView, PortfolioChartView, PortfolioCompositionView, get_active_portfolio
+    PortfolioStatsView, PortfolioChartView, PortfolioCompositionView, get_active_portfolio, PortfolioQuotesView
 
 urlpatterns = [
     path('portfolios/', PortfolioListCreateView.as_view(), name='portfolio-list-create'),
@@ -16,4 +16,5 @@ urlpatterns = [
     path('portfolio/<int:portfolio_id>/stats/', PortfolioStatsView.as_view(), name='portfolio-stats'),
     path('portfolio/<int:portfolio_id>/chart/', PortfolioChartView.as_view(), name='portfolio-chart'),
     path('portfolio/<int:portfolio_id>/composition/', PortfolioCompositionView.as_view(), name='portfolio-composition'),
+    path('portfolio/<int:portfolio_id>/quotes/', PortfolioQuotesView.as_view(), name='portfolio-quotes'),
 ]

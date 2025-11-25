@@ -99,3 +99,39 @@ def get_company_name(symbol: str):
     cache.set(f"company_name_{symbol}", name, timeout=60 * 60 * 24)
 
     return name
+
+def get_latest_prices(symbols: list):
+    if not symbols:
+        return {}
+
+    symbols = [symbol.upper() for symbol in symbols]
+    unique_symbols = list(set(symbols))
+
+    tickers_str = " ".join(unique_symbols)
+    print(f"🔄 Batch fetching prices for: {tickers_str}")
+
+    try:
+        data = yf.download(tickers_str, period="1d", group_by="ticker", progress=False, threads=True)
+        prices = {}
+
+        if len(unique_symbols) == 1:
+            symbol = unique_symbols[0]
+
+            if not data.empty:
+                prices[symbol] = round(float(data["Close"].iloc[-1]), 2)
+        else:
+            for symbol in unique_symbols:
+                try:
+                    symbol_data = data[symbol]
+
+                    if not symbol_data.empty:
+                        prices[symbol] = round(float(symbol_data["Close"].iloc[-1]), 2)
+                except KeyError:
+                    print(f"⚠️ No data found for {symbol} in batch response")
+                    continue
+
+        return prices
+
+    except Exception as e:
+        print(f"❌ Error batch fetching prices: {e}")
+        return {}
