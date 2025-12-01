@@ -151,11 +151,18 @@ class PortfolioStatsView(APIView):
                 "profit_value": 0,
                 "profit_percent": 0,
                 "weekly_change_percent": 0,
+                "best_performer": None,
+                "worst_performer": None
             })
 
         total_current_value = 0.0
         total_cost_basis = 0.0
         total_value_week_ago = 0.0
+
+        best_stock = None
+        worst_stock = None
+        highest_return = -float('inf')
+        lowest_return = float('inf')
 
         week_ago_date = timezone.now().date() - datetime.timedelta(days=7)
 
@@ -171,16 +178,41 @@ class PortfolioStatsView(APIView):
                     continue
 
                 current_price = float(df.iloc[-1]["Close"])
-                past_data = df.loc[df["Date"] <= week_ago_date]
 
+                past_data = df.loc[df["Date"] <= week_ago_date]
                 if not past_data.empty:
                     price_week_ago = float(past_data.iloc[-1]["Close"])
                 else:
                     price_week_ago = float(df.iloc[0]["Close"])
 
-                total_current_value += current_price * quantity
-                total_cost_basis += purchase_price * quantity
+                stock_value = current_price * quantity
+                stock_cost = purchase_price * quantity
+
+                total_current_value += stock_value
+                total_cost_basis += stock_cost
                 total_value_week_ago += price_week_ago * quantity
+
+                if stock_cost > 0:
+                    stock_profit_val = stock_value - stock_cost
+                    stock_return_pct = (stock_profit_val / stock_cost) * 100
+
+                    if stock_return_pct > highest_return:
+                        highest_return = stock_return_pct
+                        best_stock = {
+                            "symbol": symbol,
+                            "name": stock.name or symbol,
+                            "return_percent": round(stock_return_pct, 2),
+                            "return_value": round(stock_profit_val, 2)
+                        }
+
+                    if stock_return_pct < lowest_return:
+                        lowest_return = stock_return_pct
+                        worst_stock = {
+                            "symbol": symbol,
+                            "name": stock.name or symbol,
+                            "return_percent": round(stock_return_pct, 2),
+                            "return_value": round(stock_profit_val, 2)
+                        }
 
             except Exception as e:
                 print(f"❌ Error calculating stats for {symbol}: {e}")
@@ -203,6 +235,8 @@ class PortfolioStatsView(APIView):
             "profit_value": round(profit_value, 2),
             "profit_percent": round(profit_percent, 2),
             "weekly_change_percent": round(weekly_change_percent, 2),
+            "best_performer": best_stock,
+            "worst_performer": worst_stock
         })
 
 
