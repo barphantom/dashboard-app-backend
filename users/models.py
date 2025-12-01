@@ -3,17 +3,17 @@ from django.db import models
 
 # Create your models here.
 class UserManager(BaseUserManager):
-    def create_user(self, email, name, last_name, password=None):
+    def create_user(self, email, name, lastName, password=None):
         if not email:
             raise ValueError('Email is required')
         email = self.normalize_email(email)
-        user = self.model(email=email, name=name, lastName=last_name)
+        user = self.model(email=email, name=name, lastName=lastName)
         user.set_password(password)
         user.save(using=self._db)
         return user
 
-    def create_superuser(self, email, name, last_name, password=None):
-        user = self.create_user(email, name, last_name, password)
+    def create_superuser(self, email, name, lastName, password=None):
+        user = self.create_user(email, name, lastName, password)
         user.is_staff = True
         user.is_superuser = True
         user.save(using=self._db)
