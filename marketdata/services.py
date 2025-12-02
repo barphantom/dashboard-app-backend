@@ -112,26 +112,64 @@ def get_latest_prices(symbols: list):
 
     try:
         data = yf.download(tickers_str, period="1d", group_by="ticker", progress=False, threads=True, auto_adjust=False)
+        print(f"📊 DEBUG Data Columns: {data.columns}")
+
         prices = {}
 
         if len(unique_symbols) == 1:
             symbol = unique_symbols[0]
 
-            if not data.empty:
-                prices[symbol] = round(float(data["Close"].iloc[-1]), 2)
+            if data.empty:
+                print(f"⚠️ Empty data received for {symbol}")
+                return {}
+
+            try:
+                if isinstance(data.columns, pd.MultiIndex):
+                    if symbol in data.columns:
+                        # Ścieżka: data['NVDA']['Close']
+                        ticker_data = data[symbol]
+                    else:
+                        print(f"⚠️ Symbol {symbol} not found in columns: {data.columns}")
+                        return {}
+                else:
+                    ticker_data = data
+
+                if "Close" in ticker_data.columns:
+                    price = ticker_data["Close"].iloc[-1]
+                elif "Adj Close" in ticker_data.columns:
+                    price = ticker_data["Adj Close"].iloc[-1]
+                else:
+                    print(f"⚠️ No 'Close' column found for {symbol}. Available: {ticker_data.columns}")
+                    return {}
+
+                prices[symbol] = round(float(price), 2)
+
+            except Exception as e:
+                print(f"⚠️ Error parsing single ticker {symbol}: {e}")
+
         else:
             for symbol in unique_symbols:
                 try:
-                    symbol_data = data[symbol]
+                    if symbol in data.columns:
+                        symbol_data = data[symbol]
 
-                    if not symbol_data.empty:
-                        prices[symbol] = round(float(symbol_data["Close"].iloc[-1]), 2)
+                        if "Close" in symbol_data.columns:
+                            price = symbol_data["Close"].iloc[-1]
+                        elif "Adj Close" in symbol_data.columns:
+                            price = symbol_data["Adj Close"].iloc[-1]
+                        else:
+                            continue
+
+                        prices[symbol] = round(float(price), 2)
                 except KeyError:
                     print(f"⚠️ No data found for {symbol} in batch response")
+                    continue
+                except Exception as inner_e:
+                    print(f"⚠️ Error parsing multi ticker {symbol}: {inner_e}")
                     continue
 
         return prices
 
     except Exception as e:
-        print(f"❌ Error batch fetching prices: {e}")
+        print(f"❌ Critical Error batch fetching prices: {e}")
         return {}
