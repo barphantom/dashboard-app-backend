@@ -22,7 +22,7 @@ class RegisterView(generics.CreateAPIView):
             "user": {
                 "email": user.email,
                 "name": user.name,
-                "lastName": user.lastName,
+                "lastName": user.last_name,
             },
             "access": str(refresh.access_token),
             "refresh": str(refresh),
@@ -49,7 +49,7 @@ class LoginView(APIView):
             "user": {
                 "email": user.email,
                 "name": user.name,
-                "lastName": user.lastName,
+                "lastName": user.last_name,
             }
         })
 
