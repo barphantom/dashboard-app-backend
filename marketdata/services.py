@@ -111,7 +111,7 @@ def get_latest_prices(symbols: list):
     print(f"🔄 Batch fetching prices for: {tickers_str}")
 
     try:
-        data = yf.download(tickers_str, period="1d", group_by="ticker", progress=False, threads=True)
+        data = yf.download(tickers_str, period="1d", group_by="ticker", progress=False, threads=True, auto_adjust=False)
         prices = {}
 
         if len(unique_symbols) == 1:
