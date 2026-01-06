@@ -129,3 +129,26 @@ class GARecommendationRequestSerializer(serializers.Serializer):
             )
 
         return data
+
+
+class SegmentSerializer(serializers.Serializer):
+    ratio = serializers.FloatField(min_value=0.0, max_value=1.0)
+    risk = serializers.IntegerField(min_value=1, max_value=5)
+    investment_goal = serializers.ChoiceField(choices=["growth", "income", "balanced"])
+    time_horizon = serializers.ChoiceField(choices=["short", "medium", "long"])
+
+
+class GAPortfolioRequestSerializer(serializers.Serializer):
+    portfolio_size = serializers.IntegerField(min_value=1, max_value=100, default=10)
+    concentration = serializers.IntegerField(min_value=1, max_value=5, default=1)
+    segments = SegmentSerializer(many=True)
+
+    def validate_segments(self, value):
+        if not value:
+            raise serializers.ValidationError("Lista segmentów nie może być pusta.")
+
+        total_ratio = sum(item['ratio'] for item in value)
+
+        if not (0.95 <= total_ratio <= 1.05):
+            raise serializers.ValidationError(f"Suma ratio segmentów musi wynosić 1.0 (obecnie: {total_ratio})")
+        return value
